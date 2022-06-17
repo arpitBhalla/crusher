@@ -114,7 +114,7 @@ const finalConfig = [
 			minimize: true,
 			minimizer: [new TerserPlugin({ /* additional options here */ })],
 		},
-
+		// externals: ["snappy"],
 	},
 	{
 		...commonConfig,

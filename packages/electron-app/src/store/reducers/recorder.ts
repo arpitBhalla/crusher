@@ -16,6 +16,7 @@ export enum TRecorderState {
 	REPLAYING = "REPLAYING", // <- Internal State (Replay all test actions in a test)
 
 	PERFORMING_ACTIONS = "PERFORMING_ACTIONS",
+	CUSTOM_CODE_ON = "CUSTOM_CODE_ON",
 	PERFORMING_RECORDER_ACTIONS = "PERFORMING_RECORDER_ACTIONS",
 
 	ACTION_REQUIRED = "ACTION_REQURED",
@@ -94,7 +95,7 @@ const initialState: IRecorderReducer = {
 	isVerified: false,
 	crashState: null,
 
-	showStatusBar: false,
+	showStatusBar: true,
 };
 
 const recorderReducer = (state: IRecorderReducer = initialState, action: AnyAction) => {

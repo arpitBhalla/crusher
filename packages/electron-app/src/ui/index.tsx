@@ -1,4 +1,5 @@
 import './wdyr';
+import { setupLogger } from "@crusher-shared/modules/logger";
 import React from "react";
 import { css, Global } from "@emotion/react";
 import { render } from "react-dom";
@@ -11,15 +12,15 @@ import { Provider, useDispatch, useSelector, useStore } from "react-redux";
 import { getInitialStateRenderer } from "electron-redux";
 import { ipcRenderer } from "electron";
 import { resetRecorder, setDevice, setIsWebViewInitialized, updateRecorderState } from "../store/actions/recorder";
-import { getRecorderInfo, getSavedSteps, isWebViewInitialized } from "../store/selectors/recorder";
-import { goFullScreen, performNavigation, performReplayTest, performSetDevice, performSteps, resetStorage, saveSetDeviceIfNotThere } from "./commands/perform";
+import { getIsStatusBarVisible, getRecorderInfo, getRecorderState, getSavedSteps, isWebViewInitialized } from "../store/selectors/recorder";
+import { goFullScreen, performNavigation, performReplayTest, performReplayTestUrlAction, performSetDevice, performSteps, resetStorage, saveSetDeviceIfNotThere } from "./commands/perform";
 import { devices } from "../devices";
 import { iReduxState } from "../store/reducers/index";
 import { IDeepLinkAction } from "../types";
 import { Emitter } from "event-kit";
 import { setSessionInfoMeta, setSettngs, setShowShouldOnboardingOverlay, setUserAccountInfo } from "../store/actions/app";
 import { getAppSessionMeta } from "../store/selectors/app";
-import { ToastSnackbar } from "./components/toast";
+import { sendSnackBarEvent, ToastSnackbar } from "./components/toast";
 import { TRecorderState } from "../store/reducers/recorder";
 import { webFrame } from "electron";
 import { TourProvider, useTour } from "@reactour/tour";
@@ -32,6 +33,10 @@ import { LoginScreen } from './screens/login';
 import { LoadingScreen } from './screens/loading';
 import { CreateTestScreen } from './screens/createTest';
 import { SelectProjectScreen } from './screens/selectProject';
+import { StatusBar } from './components/status-bar';
+import { UnDockCodeScreen } from './screens/undockCode';
+import { InfoOverLay } from './components/overlays/infoOverlay';
+import InsufficientPermissionScreen from "./screens/insufficientPermission";
 
 webFrame.setVisualZoomLevelLimits(1, 3);
 
@@ -42,21 +47,17 @@ const App = () => {
 
 	const store = useStore();
 	const recorderInfo = useSelector(getRecorderInfo);
+	const isStatusBarVisible = useSelector(getIsStatusBarVisible);
+	const recorderState = useSelector(getRecorderState);
 
 	React.useEffect(() => {
+		document.querySelector("html").style = "";
 		//@ts-ignore
 		// document.body.querySelector("#welcome_splash").style.display = "none";
 		ipcRenderer.on("webview-initialized", async (event: Electron.IpcRendererEvent, { initializeTime }) => {
 			store.dispatch(setIsWebViewInitialized(true));
-			store.dispatch(updateRecorderState(TRecorderState.RECORDING_ACTIONS, {}));
+			// store.dispatch(updateRecorderState(TRecorderState.RECORDING_ACTIONS, {}));
 			const recorderInfo = getRecorderInfo(store.getState() as any);
-			await performSetDevice(recorderInfo.device);
-
-			emitter.emit("renderer-webview-initialized");
-			if (recorderInfo.url) {
-				// Perform navigation to the url that was set before the webview was initialized
-				await performNavigation(recorderInfo.url, store);
-			}
 		});
 
 		ipcRenderer.send("renderer-ready", /* @TODO Add correct rendering time */ window["performance"].now());
@@ -74,24 +75,44 @@ const App = () => {
 					}),
 				);
 
+				const handleCompletion = () => {
+					if (action.args.redirectAfterSuccess) {
+						let testsCompleted = true;
+						let totalCount = 1;
+						if (window["testsToRun"]) {
+							totalCount = window["testsToRun"].count;
+							window["testsToRun"].list = window["testsToRun"].list.filter((a) => a !== action.args.testId);
+							if (!window["testsToRun"].list.length) {
+								window["testsToRun"] = null;
+							} else {
+								testsCompleted = false;
+							}
+						}
+						window["triggeredTest"] = { id: -1, type: "local" };
+
+						// navigate("/");
+						if(testsCompleted) {
+							navigate("/");
+							goFullScreen(false);
+							sendSnackBarEvent({type: "test_report", message: null, meta: { totalCount }});
+						}
+						if(!testsCompleted) {
+													// goFullScreen(false);
+
+													navigate("/recorder");
+													goFullScreen();
+													performReplayTestUrlAction(window["testsToRun"].list[0], true);
+						}
+					}
+				}
 				if (isWebViewPresent) {
 					performReplayTest(action.args.testId).then((res) => {
-						if(action.args.redirectAfterSuccess) {
-							navigate("/");
-						}
-					});
+						handleCompletion();
+					}).catch((err) => { if (window["testsToRun"]) { handleCompletion(); } } );
 				} else {
-					store.dispatch(setDevice(devices[0].id));
-					emitter.once("renderer-webview-initialized", () => {
-						console.log("Render webview initialized listener called");
-						performReplayTest(action.args.testId).then((res) => {
-							if(action.args.redirectAfterSuccess) {
-								window["triggeredTest"] = {id: -1, type: "local"};
-								navigate("/");
-								goFullScreen(false);
-							}
-						});
-					});
+					performReplayTest(action.args.testId).then((res) => {
+						handleCompletion();
+					}).catch((err) => { if (window["testsToRun"]) { handleCompletion() } });
 				}
 			} else if(action.commandName === "restore") {
 				if(window.localStorage.getItem("saved-steps")){
@@ -99,10 +120,7 @@ const App = () => {
 					console.log("Saved steps are", savedSteps);
 					window.localStorage.removeItem("saved-steps");
 					const setDeviceStep = savedSteps.find((step: iAction) => step.type === ActionsInTestEnum.SET_DEVICE);
-					store.dispatch(setDevice(setDeviceStep.payload.meta.device.id));
-					emitter.once("renderer-webview-initialized", () => {
-						performSteps(savedSteps);
-					});
+					performSteps(savedSteps);
 				}
 			}
 		});
@@ -113,6 +131,11 @@ const App = () => {
 			ipcRenderer.removeAllListeners("webview-initialized");
 			store.dispatch(resetRecorder());
 			store.dispatch(setSessionInfoMeta({}));
+			const sessionInfoMeta = getAppSessionMeta(store.getState() as any);
+			setSessionInfoMeta({
+				...sessionInfoMeta,
+				remainingSteps: [],
+			}),
 			resetStorage();
 		}
 	}, []);
@@ -161,14 +184,20 @@ const App = () => {
 					</div>
 				</div>
 			</div>
-			<div css={containerStyle}>
+			<div css={[containerStyle, process.platform !== "darwin" ? css`height: 100vh` : undefined]}>
 				<Global styles={globalStyles} />
 				{!!recorderInfo.device ? (<Sidebar css={sidebarStyle} />) : ""}
 				<div css={bodyStyle}>
-					<Toolbar css={toolbarStyle} />
+					<Toolbar css={[toolbarStyle, isStatusBarVisible && recorderState.type === TRecorderState.CUSTOM_CODE_ON ? css`z-index: -1;` : undefined]} />
 					<DeviceFrame css={deviceFrameContainerStyle} />
+
+					{isStatusBarVisible ? (
+						<StatusBar />
+					) : ""}
 				</div>
 			</div>
+			<InfoOverLay />
+
 		</>
 	);
 };
@@ -186,13 +215,15 @@ const containerStyle = css`
 `;
 const bodyStyle = css`
 	flex: 1;
-	display: grid;
-	grid-template-rows: 62rem;
+	display: flex;
 	flex-direction: column;
+	position: relative;
+	position: relative;
+	z-index: 201;
 `;
 const sidebarStyle = css`
 	padding: 1rem;
-	width: 350rem;
+	width: 336rem;
 `;
 const toolbarStyle = css`
 	background-color: #111213;
@@ -401,7 +432,7 @@ render(
 					<Route path="/" element={<DashboardScreen/>}/>
 					<Route path="/select-project" element={<SelectProjectScreen/>}/>
 					<Route path="/create-test" element={<CreateTestScreen/>}/>
-
+					<Route path="/code-editor" element={<UnDockCodeScreen/>}/>
 					<Route path="/recorder" element={		<TourProvider
 			onClickMask={() => {}}
 			disableDotsNavigation={true}

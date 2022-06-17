@@ -6,6 +6,7 @@ import { getUserAccountInfo } from "electron-app/src/store/selectors/app";
 import { getCloudUserInfo } from "../commands/perform";
 import { ModelContainerLayout } from "../layouts/modalContainer";
 import { LoadingScreen } from "./loading";
+import { CommonFooter } from "../layouts/commonFooter";
 
 function ProjectList({userInfo}) {
     const navigate = useNavigate();
@@ -14,7 +15,7 @@ function ProjectList({userInfo}) {
     return (
         <ul css={testItemStyle}>
             {userInfo && userInfo.projects ? userInfo.projects.map((project) => {
-                return (<li onClick={() => { navigate("/?project_id=" + project.id); }}>
+                return (<li onClick={() => { window.localStorage.setItem("projectId", project.id); navigate("/?project_id=" + project.id); }}>
                     <span>{project.name}</span>
                         </li>);
             }) : ""}
@@ -40,7 +41,7 @@ function SelectProjectScreen() {
     }
 
     return (
-        <ModelContainerLayout title={<div css={titleStyle}>Select your project</div>} footer={null}>
+        <ModelContainerLayout title={<div css={titleStyle}>Select project</div>} footer={<CommonFooter/>}>
             <ProjectList userInfo={userInfo}/>
         </ModelContainerLayout>
     );
@@ -49,9 +50,10 @@ function SelectProjectScreen() {
 const titleStyle = css`
     font-family: Cera Pro;
     font-style: normal;
-    font-weight: 600;
-    font-size: 15px;
+    font-weight: 500;
+    font-size: 13.4px;
     color: #FFFFFF;
+
 `;
 
 const testItemStyle = css`
@@ -64,7 +66,7 @@ const testItemStyle = css`
     color: #FFFFFF;
 
     li {
-        padding: 14px 46px;
+        padding: 14px 24px;
         position: relative;
         .action-buttons {
             display: none;

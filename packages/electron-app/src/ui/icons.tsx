@@ -538,9 +538,10 @@ const CrusherIcon = (props) => {
 
 const CrusherHammerColorIcon = (props) => (
     <svg
-      viewBOx={"0 0 23 23"}
+      viewBox={"0 0 23 23"}
       fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+		xmlns="http://www.w3.org/2000/svg"
+			css={css`zoom: .9`}
       {...props}
     >
       <path
@@ -584,7 +585,83 @@ const CrusherHammerColorIcon = (props) => (
 		fill="#fff"
 	  />
 	</svg>
-  )
+	)
+
+	const PlayIconV2 = (props) => (
+		<svg
+			viewBox={"0 0 16 16"}
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+			{...props}
+		>
+			<rect width={16} height={16} rx={5} fill="#9462FF" />
+			<path
+				d="M5.693 11a.742.742 0 0 1-.328-.076.63.63 0 0 1-.365-.56V5.636a.63.63 0 0 1 .365-.56.737.737 0 0 1 .67.008l4.649 2.418a.63.63 0 0 1 .232.214.528.528 0 0 1 0 .568.63.63 0 0 1-.232.213l-4.649 2.42a.743.743 0 0 1-.342.083Z"
+				fill="#000"
+				fillOpacity={0.6}
+			/>
+		</svg>
+	)
+
+
+
+const CreateIcon = (props) => (
+    <svg
+      viewBox={"0 0 28 28"}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M21.533.753a2.571 2.571 0 0 0-3.637 0l-4.753 4.753v-.64a2.572 2.572 0 0 0-2.572-2.571h-8A2.571 2.571 0 0 0 0 4.866v20.572a2 2 0 0 0 2 2h20.571a2.572 2.572 0 0 0 2.572-2.572v-8.005a2.572 2.572 0 0 0-2.572-2.57h-.635l4.749-4.75a2.571 2.571 0 0 0 0-3.636L21.533.753Zm-8.39 9.187 4.35 4.35h-4.35V9.94Zm-1.714 4.35H1.714V4.866c0-.473.384-.857.857-.857h8c.474 0 .858.384.858.857v9.424Zm-9.715 1.714h9.715v9.72H2.57a.857.857 0 0 1-.857-.858v-8.862Zm11.429 9.72v-9.72h9.428c.474 0 .858.384.858.857v8.005a.857.857 0 0 1-.858.857h-9.428Z"
+        fill="#D6FF80"
+      />
+    </svg>
+);
+
+const ConnectivityWarningIcon = (props) => (
+    <svg
+      viewBox={"0 0 43 35"}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M15.628 16.462c-2.933.896-5.7 2.48-8.023 4.794l4.055 4.055a13.59 13.59 0 0 1 4.142-2.828l-.174-6.02ZM15.296 5.447A29.917 29.917 0 0 0 0 13.652l4.055 4.054a24.243 24.243 0 0 1 11.415-6.412l-.174-5.847ZM27.305 5.447l-.174 5.856a24.243 24.243 0 0 1 11.416 6.412l4.055-4.054a29.835 29.835 0 0 0-15.297-8.214ZM26.79 22.483a13.607 13.607 0 0 1 4.15 2.837l4.055-4.055a19.277 19.277 0 0 0-8.023-4.803l-.183 6.021ZM21.301 34.526a3.48 3.48 0 1 0 0-6.961 3.48 3.48 0 0 0 0 6.96ZM22.676 24.71h-2.758a1.33 1.33 0 0 1-1.332-1.296l-.66-22.04A1.336 1.336 0 0 1 19.255 0h4.09a1.33 1.33 0 0 1 1.331 1.375l-.67 22.04a1.33 1.33 0 0 1-1.331 1.296Z"
+        fill="#4E4E4E"
+      />
+    </svg>
+);
+
+
+function PlayV2Icon(props) {
+    return (
+      <svg
+        width={18}
+        height={18}
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        {...props}
+      >
+        <rect width={18} height={18} rx={9} fill="#A966FF" />
+        <rect
+          x={0.125}
+          y={0.125}
+          width={17.75}
+          height={17.75}
+          rx={8.875}
+          stroke="#000"
+          strokeOpacity={0.53}
+          strokeWidth={0.25}
+        />
+        <path
+          d="M7.963 12.123a.58.58 0 01-.291-.08.67.67 0 01-.324-.582V6.539a.67.67 0 01.324-.582.576.576 0 01.595.007l4.126 2.518a.607.607 0 01.281.518.62.62 0 01-.28.517l-4.128 2.519a.584.584 0 01-.303.087z"
+          fill="#fff"
+        />
+      </svg>
+    );
+  }
+
 
 export {
 	CrusherIcon,
@@ -617,5 +694,9 @@ export {
 	StopIcon,
 	MiniCrossIcon,
 	ConsoleIcon,
-	UpMaximiseIcon
+	UpMaximiseIcon,
+	PlayIconV2,
+	CreateIcon,
+	ConnectivityWarningIcon,
+	PlayV2Icon
 };

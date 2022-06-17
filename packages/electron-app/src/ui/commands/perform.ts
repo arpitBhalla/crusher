@@ -183,6 +183,9 @@ const performReplayTest = async (testId) => {
 	return ipcRenderer.invoke("replay-test", { testId });
 };
 
+const performClearRemainingStpes = () => {
+	return ipcRenderer.invoke("clear-remaining-steps");
+}
 
 const performReplayTestUrlAction = async (testId, redirectAfterSuccess = false) => {
 	return ipcRenderer.invoke("replay-test-url-action", { testId, redirectAfterSuccess });
@@ -249,6 +252,10 @@ const resetTest = (device: iDevice) => {
 	ipcRenderer.invoke("reset-test", { device });
 };
 
+const performDeleteTest = (testId: string) => {
+	return ipcRenderer.invoke('delete-test', { testId });
+}
+
 const focusOnWindow = () => {
 	ipcRenderer.invoke("focus-window");
 };
@@ -301,6 +308,19 @@ const updateCodeTemplate = (id, name, code) => {
 const deleteCodeTemplate = (id) => {
 	return ipcRenderer.invoke("delete-code-template", { id });
 };
+
+const performExit = () => {
+	return ipcRenderer.invoke("exit-app");
+}
+
+const performUndockCode = () => {
+	return ipcRenderer.invoke("undock-code");
+}
+
+const turnOnProxy = (configFilePath) => {
+	return ipcRenderer.invoke("turn-on-proxy", { configFilePath });
+}
+
 export {
 	recordHoverDependencies,
 	performAction,
@@ -345,5 +365,10 @@ export {
 	getCloudUserInfo,
 	getBuildReport,
 	updateTestName,
-	performRunTests
+	performRunTests,
+	performClearRemainingStpes,
+	performDeleteTest,
+	performExit,
+	performUndockCode,
+	turnOnProxy
 };

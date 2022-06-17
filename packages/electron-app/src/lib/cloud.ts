@@ -46,10 +46,20 @@ class CloudCrusher {
 			},
 		}).then((res) => res.data);
 	}
-	
-	public static async runTests(testIds: Array<string> | null, projectId: string, userToken: string, customBackendPath: string | undefined = undefined) {
+
+	public static async runTests(testIds: Array<string> | null, projectId: string, 	proxyUrlsMap: any | null,		userToken: string, customBackendPath: string | undefined = undefined) {
+		console.log("proxy url is", proxyUrlsMap);
+		const proxyUrlsMapsRaw = proxyUrlsMap && Object.keys(proxyUrlsMap).length ? proxyUrlsMap : undefined;
+		let proxyUrlsMapa = undefined;
+		if(proxyUrlsMapsRaw) {
+			proxyUrlsMapa={};
+			Object.keys(proxyUrlsMap).forEach((key) => {
+				proxyUrlsMapa[key] = {...proxyUrlsMap[key], tunnel: proxyUrlsMap[key].tunnel.replace("https://", "http://")};
+			});
+		}
 		return axios.post(resolveToBackendPath(`/projects/${projectId}/tests/actions/run`, customBackendPath), {
 			testIds: Array.isArray(testIds) ? testIds.join(",") : null,
+			proxyUrlsMap: proxyUrlsMapa ? proxyUrlsMapa : undefined,
 		}, {
 			headers: {
 				Cookie: `isLoggedIn=true; token=${userToken}`,
@@ -101,6 +111,14 @@ class CloudCrusher {
 		}).then((res) => res.data);
 	}
 
+	public static async deleteTest(testId, userToken: string,	customBackendPath: string | undefined = undefined,
+		customFrontEndPath: string | undefined = undefined) {
+		return axios.post(resolveToBackendPath(`/tests/${testId}/actions/delete`, customBackendPath), {}, {
+			headers: {
+				Cookie: `isLoggedIn=true; token=${userToken}`,
+			},
+		}).then((result) => result.data);
+	}
 	public static async saveTest(
 		events: Array<iAction>,
 		customBackendPath: string | undefined = undefined,

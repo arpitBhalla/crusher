@@ -10,13 +10,14 @@ import { BrowserButton } from "../buttons/browser.button";
 import { useDispatch, batch, useSelector, useStore } from "react-redux";
 import { setDevice, setSiteUrl } from "electron-app/src/store/actions/recorder";
 import { devices } from "../../../devices";
-import { getRecorderInfo, getRecorderInfoUrl, getRecorderState, isTestVerified } from "electron-app/src/store/selectors/recorder";
+import { getRecorderInfo, getRecorderInfoUrl, getRecorderState, getSavedSteps, isTestVerified } from "electron-app/src/store/selectors/recorder";
 import {
 	goFullScreen,
 	performNavigation,
 	performReloadPage,
 	performResetAppSession,
 	performSetDevice,
+	performSteps,
 	performVerifyTest,
 	preformGoBackPage,
 	resetTest,
@@ -25,7 +26,7 @@ import {
 } from "../../commands/perform";
 import { addHttpToURLIfNotThere, isValidHttpUrl } from "../../../utils";
 import { TRecorderState } from "electron-app/src/store/reducers/recorder";
-import { getAppEditingSessionMeta } from "electron-app/src/store/selectors/app";
+import { getAppEditingSessionMeta, getProxyState } from "electron-app/src/store/selectors/app";
 import { SettingsModal } from "./settingsModal";
 import { TourContext, useTour } from "@reactour/tour";
 import { setShowShouldOnboardingOverlay } from "electron-app/src/store/actions/app";
@@ -33,6 +34,8 @@ import { sendSnackBarEvent } from "../toast";
 import { Dropdown } from "@dyson/components/molecules/Dropdown";
 import { TextBlock } from "@dyson/components/atoms/textBlock/TextBlock";
 import { Navigate, useNavigate } from "react-router-dom";
+import { MenuDropdown } from "../../layouts/modalContainer";
+import { ActionsInTestEnum } from "@shared/constants/recordedActions";
 
 const DeviceItem = ({ label }) => {
 	return (
@@ -125,6 +128,19 @@ const SaveVerifyButton = ({ isTestVerificationComplete }) => {
 	const dispatch = useDispatch();
 	const store = useStore();
 
+	const handleProxyWarning = React.useCallback(() => {
+		const steps = getSavedSteps(store.getState());
+		const navigationStep = steps.find((step) => step.type === ActionsInTestEnum.NAVIGATE_URL);
+		const startNavigationUrl = navigationStep && navigationStep.payload && navigationStep.payload.meta ? navigationStep.payload.meta.value : "";
+		const startUrl = new URL(startNavigationUrl);
+		const proxyState = getProxyState(store.getState());
+
+		const hasProxyEnabled = proxyState && Object.keys(proxyState).length;
+		if(startUrl.hostname.toLowerCase() === "localhost" && !hasProxyEnabled) {
+			window["showProxyWarning"] = true;
+		}
+	}, []);
+
 	const verifyTest = () => {
 		localStorage.setItem("app.showShouldOnboardingOverlay", "false");
 		dispatch(setShowShouldOnboardingOverlay(false));
@@ -135,7 +151,9 @@ const SaveVerifyButton = ({ isTestVerificationComplete }) => {
 		if (recorderState.type === TRecorderState.RECORDING_ACTIONS) {
 			performVerifyTest().then((res) => {
 				if(res && res.draftJobId) {
-					window["triggeredTest"] = { id: res.draftJobId };
+					window["triggeredTest"] = {
+						 id: res.draftJobId };
+					handleProxyWarning();
 					navigate("/");
 					goFullScreen(false);
 				}
@@ -157,6 +175,7 @@ const SaveVerifyButton = ({ isTestVerificationComplete }) => {
 		saveTest().then((res) => {
 			console.log("Naviagting to", res);
 			window["triggeredTest"] = { id: res.draftJobId };
+			handleProxyWarning();
 			navigate("/");
 			goFullScreen(false);
 		}).catch((err) => {
@@ -170,6 +189,7 @@ const SaveVerifyButton = ({ isTestVerificationComplete }) => {
 		}
 
 		updateTest().then((res) => {
+			handleProxyWarning();
 			navigate("/");
 			goFullScreen(false);
 		});
@@ -200,7 +220,7 @@ const SaveVerifyButton = ({ isTestVerificationComplete }) => {
 						}}
 						bgColor="tertiary-outline"
 						css={saveButtonStyle}
-						className={"ml-36"}
+						className={"ml-20"}
 					>
 						<Conditional showIf={isTestVerificationComplete}>
 							<span>
@@ -226,7 +246,7 @@ const SaveVerifyButton = ({ isTestVerificationComplete }) => {
 						}}
 						bgColor="tertiary-outline"
 						css={saveButtonStyle}
-						className={"ml-36"}
+						className={"ml-20"}
 					>
 						<Conditional showIf={isTestVerificationComplete}>
 							<span>
@@ -302,7 +322,7 @@ const Toolbar = (props: any) => {
 	const navigate = useNavigate();
 
 	const [url, setUrl] = React.useState("" || null);
-	const [selectedDevice, setSelectedDevice] = React.useState([recorderDevices[0].value]);
+	const [selectedDevice, setSelectedDevice] = React.useState([recorderDevices[0]]);
 	const [showSettingsModal, setShowSettingsModal] = React.useState(false);
 	const [urlInputError, setUrlInputError] = React.useState({ value: false, message: "" });
 	const [showMenu, setShowMenu] = React.useState(false);
@@ -340,16 +360,48 @@ const Toolbar = (props: any) => {
 			}
 			setUrlInputError({ value: false, message: "" });
 			batch(() => {
-				if (selectedDevice[0] !== recorderInfo.device?.id) {
-					// Setting the device will add webview in DOM tree
-					// navigation will be run after 'webview-initialized' event
-					dispatch(setDevice(selectedDevice[0]));
-				}
+				if (!recorderInfo.url) {
+					console.log("Selected device is", selectedDevice[0]);
+					// @NOTE: Find better way to make sure initScript is done
+					// webview.
+					performSteps([{
+						"type": "BROWSER_SET_DEVICE",
+						"payload": {
+							"meta": {
+								"device": selectedDevice[0].device
+							}
+						},
+						"time": Date.now()
+					},
+					{
+						"type": "PAGE_NAVIGATE_URL",
+						"shouldNotRecord": true,
+						"payload": {
+							"selectors": [
 
-				dispatch(setSiteUrl(validUrl.toString()));
-				if (recorderInfo.url) {
-					// Perform navigation if already recording
-					performNavigation(validUrl.toString(), store);
+							],
+							"meta": {
+								"value": "about:blank"
+							}
+						},
+						"status": "COMPLETED",
+						"time": Date.now()
+					},
+					{
+						"type": "PAGE_NAVIGATE_URL",
+						"payload": {
+							"selectors": [
+
+							],
+							"meta": {
+								"value": validUrl
+							}
+						},
+						"status": "COMPLETED",
+						"time": Date.now()
+					}]);
+				} else {
+					performNavigation(validUrl, store);
 				}
 				// Just in case onboarding overlay info is still visible
 				dispatch(setShowShouldOnboardingOverlay(false));
@@ -367,13 +419,13 @@ const Toolbar = (props: any) => {
 	}, [selectedDevice]);
 
 	const handleChangeDevice = (selected) => {
-		const device = recorderDevices.find((device) => device.value === selected[0])?.device;
-		setSelectedDevice([selected[0]]);
+		const deviceObj = recorderDevices.find((device) => device.value === selected[0]);
+		setSelectedDevice([deviceObj]);
 		const recorderInfo = getRecorderInfo(store.getState());
-		if (recorderInfo.url) {
-			// Only perform and set if already recording
-			resetTest(device);
-		}
+		// if (recorderInfo.url) {
+		// 	// Only perform and set if already recording
+		// 	resetTest(deviceObj.device);
+		// }
 	};
 
 	const isRecorderInInitialState = recorderState.type === TRecorderState.BOOTING;
@@ -431,17 +483,24 @@ const Toolbar = (props: any) => {
 								values={recorderDevices}
 							/>
 	), [selectedDevice, recorderDevices]);
+
+	const handleMenuCallback = React.useCallback((value, isNavigating) => {
+		console.log("Menu callback", value, isNavigating);
+		if(isNavigating) {
+			goFullScreen(false);
+		}
+	}, []);
 	return (
-		<div css={containerStyle}>
+		<div css={containerStyle} {...props}>
 			<Conditional showIf={isTestBeingVerified}>
 				<div
 					css={testBeingVerifiedContainerStyle}
 				>
-					<span
+					{/* <span
 						css={drinkCupTextStyle}
 					>
 						Drink a cup of coffee meanwhile
-					</span>
+					</span> */}
 					<div
 						css={verifyStatusIconStyle}
 					>
@@ -451,7 +510,7 @@ const Toolbar = (props: any) => {
 						<span
 							css={loadingTextStyle}
 						>
-							Our bot is verifying your test.{" "}
+							Crusher is verifying your test.{" "}
 						</span>
 					</div>
 				</div>
@@ -472,15 +531,7 @@ const Toolbar = (props: any) => {
 						disabled={false}
 					/>
 				</BrowserButton> */}
-
-				<CrusherHammerIcon
-					className={"ml-24"}
-					css={hammerIconStyle}
-					onClick={() => {
-						navigate("/");
-						goFullScreen(false);
-				}}
-				/>
+				<MenuDropdown isRecorder={true} callback={handleMenuCallback} css={css`.crusher-hammer-icon{ margin-left: 20rem; }`}/>
 				{/* <BrowserButton
 					className={"ml-24 go-back-button"}
 					css={css`
@@ -526,7 +577,7 @@ const Toolbar = (props: any) => {
 						isError={urlInputError.value}
 						initialValue={url}
 						ref={urlInputRef}
-						leftIcon={LeftIconComponent}
+						// leftIcon={LeftIconComponent}
 						rightIcon={RightIconComponent}
 					/>
 					<Conditional showIf={urlInputError.value}>
@@ -538,7 +589,7 @@ const Toolbar = (props: any) => {
 					</Conditional>
 				</div>
 				<Conditional showIf={isRecorderInInitialState}>
-					<Button className={"ml-24"} onClick={handleUrlReturn.bind(this)} bgColor="tertiary-outline" css={buttonStyle}>
+					<Button className={"ml-12"} onClick={handleUrlReturn.bind(this)} bgColor="tertiary-outline" css={buttonStyle}>
 						Start
 					</Button>
 				</Conditional>
@@ -555,11 +606,11 @@ const Toolbar = (props: any) => {
 							]}
 						/>
 						<Text id="recorder-status" css={recTextStyle} className={"ml-8"}>
-							{![TRecorderState.PERFORMING_ACTIONS, TRecorderState.PERFORMING_RECORDER_ACTIONS].includes(recorderState.type) ? "Rec." : "Waiting"}
+							{[TRecorderState.RECORDING_ACTIONS].includes(recorderState.type) ? "Rec." : "Waiting"}
 						</Text>
 					</div>
 
-					<div className={"ml-auto flex items-center"}>
+					<div className={"ml-auto mr-22 flex items-center"}>
 						<SettingsIcon
 							onClick={setShowSettingsModal.bind(this, true)}
 							css={settingsIconStyle}
@@ -591,11 +642,15 @@ border-right: 0.35px solid rgba(255, 255, 255, 0.17);
 `;
 const selectBoxStyle = css`
 .selectBox {
+	border-top-right-radius: 100rem;
+    border-bottom-right-radius: 100rem;
 	:hover {
 		border: none;
 		border-left-width: 1rem;
 		border-left-style: solid;
-		border-left-color: #181c23;
+		border-left-color: rgba(255, 255, 255, 0.13);
+		border-top-right-radius: 100rem;
+		border-bottom-right-radius: 100rem;
 	}
 	input {
 		width: 50rem;
@@ -607,7 +662,7 @@ const selectBoxStyle = css`
 	background: none;
 	border-left-width: 1rem;
 	border-left-style: solid;
-	border-left-color: #181c23;
+	border-left-color: rgba(255, 255, 255, 0.13);
 }
 .selectBox__value {
 	margin-right: 10rem;
@@ -628,17 +683,17 @@ display: flex;
 font-weight: bold;
 align-items: center;
 font-size: 14rem;
-margin: auto;
+margin-left: auto;
+margin-right: 20rem;
 `;
 const drinkCupTextStyle = css`
 font-size: 14rem;
 margin-left: 18rem;
 `;
 const testBeingVerifiedContainerStyle  = css`
-display: flex;
-						align-items: center;
-						width: 100%;
-						`
+	display: flex;
+	align-items: flex-end;
+	width: 100%;`;
 const hammerIconStyle = css`
 width: 19rem;
 :hover {
@@ -649,7 +704,7 @@ const inputContainerStyle = css`
 position: relative;
 display: flex;
 flex-direction: column;
-margin-left: 28rem;
+margin-left: 12rem;
 `;
 
 const inputErrorMessageStyle = css`
@@ -657,7 +712,7 @@ const inputErrorMessageStyle = css`
 	bottom: -14rem;
 	font-size: 10.5rem;
 	color: #ff4583;
-							
+
 `;
 const menuContainerStyle = css`
 	font-size: 14rem;
@@ -682,7 +737,14 @@ const containerStyle = css`
 	padding-right: 24rem;
 `;
 const inputStyle = css`
-	height: 34rem;
+	height: 36rem;
+	.input__rightIconContainer {
+		right: 0px;
+
+		:hover {
+			opacity: 0.8;
+		}
+	}
 	.input__leftIconContainer {
 		border-radius: 8rem 0px 0px 8rem;
 		height: 85%;
@@ -714,11 +776,13 @@ const inputStyle = css`
 		border-radius: 8rem 0px 0px 8rem;
 		color: rgba(255, 255, 255, 0.93);
 		height: 100%;
-		padding-left: 50rem;
+		padding-left: 18rem;
 		padding-right: 110rem;
+
+		background: rgba(255, 255, 255, 0.02);
+		border: 1px solid #292929;
+		border-radius: 18px;
 	}
-	svg {
-		margin-left: auto;
 	}
 	.dropdown-box {
 		overflow: hidden;
@@ -733,17 +797,18 @@ const buttonStyle = css`
 	box-sizing: border-box;
 	border-radius: 4rem;
 	width: 93rem;
-	height: 34rem;
+	height: 36rem;
 `;
 
 const saveButtonStyle = css`
-	width: 128rem;
-	height: 30rem;
+	width: 116rem;
+	height: 32rem;
 	background: linear-gradient(0deg, #9462ff, #9462ff);
 	border-radius: 6rem;
 	font-family: Gilroy;
 	font-style: normal;
-	font-weight: normal;
+	letter-spacing: .3px;
+	font-weight: 500 !important;
 	font-size: 14rem;
 	line-height: 17rem;
 	border: 0.5px solid transparent;
